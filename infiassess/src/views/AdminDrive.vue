@@ -363,7 +363,7 @@
             <div class="content-header d-flex align-center justify-space-between">
               <div>
                 <h2 class="content-title">Settings</h2>
-                <p class="content-subtitle">Configure organization settings</p>
+                <p class="content-subtitle">Configure this drive's assessment</p>
               </div>
               <v-btn color="primary" class="action-top-btn" :loading="savingSettings" @click="saveSettings">
                 <v-icon left>mdi-content-save</v-icon>
@@ -371,81 +371,97 @@
               </v-btn>
             </div>
 
-            <div v-if="settings" class="form-card">
-              <v-text-field
-                v-model="settings.name"
-                label="Organization Name"
-                outlined
-                dense
-                class="mb-4"
-                prepend-inner-icon="mdi-office-building-outline"
-                hide-details="auto"
-              />
-              <v-row>
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model.number="settings.round1Timer"
-                    label="Round 1 Timer (minutes)"
-                    outlined
-                    dense
-                    type="number"
-                    min="1"
-                    max="180"
-                    prepend-inner-icon="mdi-timer-outline"
-                    hide-details="auto"
-                  />
-                </v-col>
-                <v-col cols="12" sm="6">
-                  <v-text-field
-                    v-model.number="settings.round2Timer"
-                    label="Round 2 Timer (minutes)"
-                    outlined
-                    dense
-                    type="number"
-                    min="1"
-                    max="180"
-                    prepend-inner-icon="mdi-timer-outline"
-                    hide-details="auto"
-                  />
-                </v-col>
-              </v-row>
-              <v-text-field
-                v-model="settings.placementDate"
-                label="Placement Date"
-                outlined
-                dense
-                type="date"
-                class="mt-4"
-                prepend-inner-icon="mdi-calendar-outline"
-                hint="Used together with College + Roll Number to uniquely identify each candidate for this drive"
-                persistent-hint
-              />
-
-              <div class="section-label mt-6 mb-1">Questions served per section (randomized per candidate)</div>
-              <v-row v-if="settings.round1Counts">
-                <v-col cols="12" sm="4">
-                  <v-text-field v-model.number="settings.round1Counts.logical" label="Logical Reasoning" type="number" min="0" outlined dense hide-details="auto" />
-                </v-col>
-                <v-col cols="12" sm="4">
-                  <v-text-field v-model.number="settings.round1Counts.problem" label="Problem Solving" type="number" min="0" outlined dense hide-details="auto" />
-                </v-col>
-                <v-col cols="12" sm="4">
-                  <v-text-field v-model.number="settings.round1Counts.coding" label="Short Coding" type="number" min="0" outlined dense hide-details="auto" />
-                </v-col>
-              </v-row>
-              <div class="toggle-row mt-4">
-                <div class="toggle-info">
-                  <div class="toggle-label">Round 1 Active</div>
-                  <div class="toggle-desc">Allow candidates to access Round 1 assessment</div>
-                </div>
-                <v-switch v-model="settings.round1Active" color="primary" inset hide-details />
+            <div v-if="settings" class="settings-stack">
+              <!-- Drive details -->
+              <div class="form-card">
+                <div class="sg-title">Drive Details</div>
+                <div class="sg-desc">Identifies this drive — fixed after creation.</div>
+                <v-row>
+                  <v-col cols="12" sm="6">
+                    <v-text-field
+                      v-model="settings.name" label="Drive Name" outlined dense disabled
+                      prepend-inner-icon="mdi-office-building-outline" hide-details="auto"
+                    />
+                  </v-col>
+                  <v-col cols="12" sm="6">
+                    <v-text-field
+                      v-model="settings.placementDate" label="Placement Date" outlined dense disabled
+                      type="date" prepend-inner-icon="mdi-calendar-outline" hide-details="auto"
+                    />
+                  </v-col>
+                </v-row>
               </div>
-              <div class="toggle-row mt-3">
-                <div class="toggle-info">
-                  <div class="toggle-label">Round 2 Active</div>
-                  <div class="toggle-desc">Allow approved candidates to access Round 2 assessment</div>
+
+              <!-- Timing -->
+              <div class="form-card">
+                <div class="sg-title">Assessment Timing</div>
+                <div class="sg-desc">Time limit per round, in minutes.</div>
+                <v-row>
+                  <v-col cols="12" sm="6">
+                    <v-text-field
+                      v-model.number="settings.round1Timer" label="Round 1 Timer (minutes)" outlined dense
+                      type="number" min="1" max="180" prepend-inner-icon="mdi-timer-outline" hide-details="auto"
+                    />
+                  </v-col>
+                  <v-col cols="12" sm="6">
+                    <v-text-field
+                      v-model.number="settings.round2Timer" label="Round 2 Timer (minutes)" outlined dense
+                      type="number" min="1" max="180" prepend-inner-icon="mdi-timer-outline" hide-details="auto"
+                    />
+                  </v-col>
+                </v-row>
+              </div>
+
+              <!-- Questions per section -->
+              <div class="form-card">
+                <div class="sg-title">Questions Per Section</div>
+                <div class="sg-desc">Number served to each candidate, randomized from the question pool.</div>
+                <v-row v-if="settings.round1Counts">
+                  <v-col cols="12" sm="4">
+                    <v-text-field v-model.number="settings.round1Counts.logical" label="Logical Reasoning" type="number" min="0" outlined dense hide-details="auto" />
+                  </v-col>
+                  <v-col cols="12" sm="4">
+                    <v-text-field v-model.number="settings.round1Counts.problem" label="Problem Solving" type="number" min="0" outlined dense hide-details="auto" />
+                  </v-col>
+                  <v-col cols="12" sm="4">
+                    <v-text-field v-model.number="settings.round1Counts.coding" label="Short Coding" type="number" min="0" outlined dense hide-details="auto" />
+                  </v-col>
+                </v-row>
+              </div>
+
+              <!-- Departments -->
+              <div class="form-card">
+                <div class="sg-title">Departments</div>
+                <div class="sg-desc">Shown as a dropdown on the candidate's assessment login. Add, rename, or remove.</div>
+                <div v-if="!settings.departments || !settings.departments.length" class="sg-empty">
+                  No departments yet — add one below.
                 </div>
-                <v-switch v-model="settings.round2Active" color="primary" inset hide-details />
+                <div v-for="(dept, i) in settings.departments" :key="i" class="dept-row">
+                  <v-text-field
+                    :value="dept" @input="v => updateDepartment(i, v)"
+                    outlined dense hide-details
+                    placeholder="e.g. Computer Science and Engineering"
+                    prepend-inner-icon="mdi-school-outline" class="dept-field"
+                  />
+                  <v-btn icon small color="error" class="ml-2" @click="removeDepartment(i)">
+                    <v-icon small>mdi-delete-outline</v-icon>
+                  </v-btn>
+                </div>
+                <v-btn small outlined color="primary" class="mt-1" @click="addDepartment">
+                  <v-icon left small>mdi-plus</v-icon> Add department
+                </v-btn>
+              </div>
+
+              <!-- Availability -->
+              <div class="form-card">
+                <div class="sg-title">Availability</div>
+                <div class="toggle-row" style="border-top:none; padding-top:6px">
+                  <div class="toggle-info">
+                    <div class="toggle-label">Round 1 Active</div>
+                    <div class="toggle-desc">Allow candidates to access the Round 1 assessment</div>
+                  </div>
+                  <v-switch v-model="settings.round1Active" color="primary" inset hide-details />
+                </div>
               </div>
             </div>
           </div>
@@ -810,10 +826,13 @@ export default {
       finally { this.gradingAll = false }
     },
     r1StatusChip(item) {
-      if (item.round1Status === 'submitted') {
+      // A submission carries `submitTime` only on final submit (finalize), so it's
+      // the reliable "done" signal even if the candidate doc's status field lagged.
+      const submitted = item.round1Status === 'submitted' || (item.round1Data && item.round1Data.submitTime)
+      if (submitted) {
         return { label: 'Submitted', color: 'rgba(17,17,17,0.15)', textColor: '#111111' }
       }
-      if (item.round1Status === 'in_progress' || (item.round1Data && item.round1Status !== 'submitted')) {
+      if (item.round1Data) {
         return { label: 'In Progress', color: 'rgba(255,193,7,0.15)', textColor: '#FFC107' }
       }
       return { label: 'Pending', color: 'rgba(17,17,17,0.07)', textColor: 'rgba(17,17,17,0.45)' }
@@ -917,6 +936,7 @@ export default {
         this.drive = drive || { id: this.driveId, name: this.driveId, round1Timer: 45, round2Timer: 60, placementDate: new Date().toISOString().slice(0, 10), round1Active: true, round2Active: false }
         this.settings = { round1Counts: { logical: 10, problem: 10, coding: 5 }, ...this.drive }
         if (!this.settings.round1Counts) this.settings.round1Counts = { logical: 10, problem: 10, coding: 5 }
+        if (!Array.isArray(this.settings.departments)) this.settings.departments = []
         this.questions = questions.sort((a, b) => (a.order || 0) - (b.order || 0))
         this.problem = { ...{ title: '', description: '', starterCode: {} }, ...problem }
 
@@ -929,7 +949,10 @@ export default {
             const g = firebaseService.gradeRound1(r1, questions)
             r1Score = { correct: g.correct, total: g.total, marks: g.marks, maxMarks: g.maxMarks }
           }
-          enriched.push({ ...c, round1Data: r1, round2Data: null, round1Score: r1Score })
+          // Normalize status from the submission itself (submitTime = finalized),
+          // so a lagging candidate-doc status field doesn't strand a finished R1.
+          const round1Status = (r1 && r1.submitTime) ? 'submitted' : (c.round1Status || (r1 ? 'in_progress' : 'pending'))
+          enriched.push({ ...c, round1Status, round1Data: r1, round2Data: null, round1Score: r1Score })
         }
         this.candidates = enriched
       } catch (e) {
@@ -1043,18 +1066,36 @@ export default {
         this.savingProblem = false
       }
     },
+    // ── Department CRUD (persisted with Save Settings) ────────────────────
+    addDepartment() {
+      if (!Array.isArray(this.settings.departments)) this.$set(this.settings, 'departments', [])
+      this.settings.departments.push('')
+    },
+    removeDepartment(i) {
+      this.settings.departments.splice(i, 1)
+    },
+    updateDepartment(i, value) {
+      this.$set(this.settings.departments, i, value)
+    },
     async saveSettings() {
       this.savingSettings = true
       try {
+        const departments = (this.settings.departments || []).map(d => (d || '').trim()).filter(Boolean)
+        // De-dupe (case-insensitive) while preserving order.
+        const seen = new Set()
+        const uniqueDepartments = departments.filter(d => {
+          const k = d.toLowerCase()
+          if (seen.has(k)) return false
+          seen.add(k); return true
+        })
         await firebaseService.updateDrive(this.orgId, this.driveId, {
-          name: this.settings.name,
           round1Timer: this.settings.round1Timer,
           round2Timer: this.settings.round2Timer,
-          placementDate: this.settings.placementDate,
           round1Counts: this.settings.round1Counts,
           round1Active: this.settings.round1Active,
-          round2Active: this.settings.round2Active,
+          departments: uniqueDepartments,
         })
+        this.settings.departments = uniqueDepartments
         this.drive = { ...this.drive, ...this.settings }
         this.showSnackbar('Settings saved', 'success')
       } catch (e) {
@@ -1340,6 +1381,13 @@ export default {
   border-radius: 12px;
   padding: 24px;
 }
+/* Revamped settings groups */
+.settings-stack { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
+.sg-title { font-size: 1rem; font-weight: 700; color: #111111; letter-spacing: -0.01em; }
+.sg-desc { font-size: 0.8rem; color: rgba(17,17,17,0.45); margin: 3px 0 18px; }
+.sg-empty { font-size: 0.82rem; color: rgba(17,17,17,0.4); margin-bottom: 12px; }
+.dept-row { display: flex; align-items: center; margin-bottom: 10px; }
+.dept-field { max-width: 520px; }
 .section-label {
   font-size: 0.78rem;
   font-weight: 600;

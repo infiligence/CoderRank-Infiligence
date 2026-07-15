@@ -53,47 +53,9 @@
               >
                 R1: {{ candidate.round1Data ? 'Submitted' : 'Pending' }}
               </v-chip>
-              <v-chip
-                v-if="candidate.rejected"
-                x-small
-                color="rgba(244,67,54,0.15)"
-                text-color="#f44336"
-                class="mr-2"
-              >Rejected</v-chip>
-              <v-chip
-                v-else-if="candidate.round2Data"
-                x-small
-                color="rgba(17,17,17,0.15)"
-                text-color="#111111"
-                class="mr-2"
-              >R2: Submitted</v-chip>
-              <v-chip
-                v-else-if="candidate.round2Approved"
-                x-small
-                color="rgba(76,175,80,0.15)"
-                text-color="#4caf50"
-                class="mr-2"
-              >R2: Approved</v-chip>
-              <v-chip
-                v-else
-                x-small
-                color="rgba(17,17,17,0.07)"
-                text-color="rgba(17,17,17,0.45)"
-                class="mr-2"
-              >R2: Pending</v-chip>
             </div>
           </div>
           <v-spacer />
-          <v-btn
-            outlined
-            color="primary"
-            class="compare-btn"
-            @click="compareDialog = true"
-            :disabled="allCandidates.length < 2"
-          >
-            <v-icon left>mdi-compare</v-icon>
-            Compare
-          </v-btn>
         </div>
 
         <!-- Round 1 review (centered, collapsible sections) -->

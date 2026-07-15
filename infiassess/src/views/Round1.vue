@@ -26,7 +26,21 @@
                 hide-details="auto"
                 :rules="[v => !!v || 'Name is required']"
               />
+              <v-select
+                v-if="departmentOptions.length"
+                v-model="form.department"
+                :items="departmentOptions"
+                label="Department"
+                outlined
+                dense
+                prepend-inner-icon="mdi-school-outline"
+                class="mb-3 ia-field"
+                hide-details="auto"
+                :menu-props="{ contentClass: 'dept-menu' }"
+                :rules="[v => !!v || 'Department is required']"
+              />
               <v-text-field
+                v-else
                 v-model="form.department"
                 label="Department"
                 outlined
@@ -293,6 +307,7 @@
                     :items="langOptions"
                     dense outlined hide-details
                     class="lang-select"
+                    :menu-props="{ contentClass: 'lang-menu' }"
                     style="max-width:170px"
                   />
                 </div>
@@ -522,6 +537,10 @@ export default {
   },
 
   computed: {
+    // Departments configured for this drive (admin-managed) → registration dropdown.
+    departmentOptions() {
+      return (this.drive && Array.isArray(this.drive.departments)) ? this.drive.departments.filter(Boolean) : []
+    },
     // Sections that actually have selected questions, in fixed order.
     activeSections() {
       return firebaseService.sections.filter(s => (this.selection[s.key] || []).length > 0)
@@ -1251,6 +1270,17 @@ export default {
   display: flex;
   align-items: center;
 }
+/* Language selector — match the rest of the UI's type scale */
+.lang-select { font-family: 'Inter', sans-serif; }
+.lang-select >>> .v-select__selection,
+.lang-select >>> .v-select__selection--comma {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #111111;
+}
+.lang-select >>> input { font-size: 0.82rem; }
+.lang-select >>> .v-input__slot { min-height: 36px !important; }
+.lang-select >>> .v-input__append-inner { margin-top: 6px; }
 .ia-editor-area {
   height: 380px;
   border: 1px solid rgba(17, 17, 17, 0.25);
@@ -1339,4 +1369,15 @@ export default {
 .ready-meta > div {
   padding: 8px 20px;
 }
+</style>
+
+<!-- Unscoped: the v-select dropdown menu renders in a portal outside this component -->
+<style>
+.lang-menu .v-list-item__title {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #111111;
+}
+.lang-menu .v-list-item { min-height: 34px; }
 </style>
