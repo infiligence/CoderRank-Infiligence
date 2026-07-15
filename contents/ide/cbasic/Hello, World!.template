@@ -1,0 +1,7 @@
+'
+' Chipmunk Basic: Hello, World!
+'
+
+PRINT "Hello, World!"
+EXIT
+END

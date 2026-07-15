@@ -1,0 +1,5 @@
+//
+// V: Hello, World!
+//
+
+println('Hello, World!')

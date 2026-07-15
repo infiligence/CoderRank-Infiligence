@@ -1,0 +1,5 @@
+//
+//  ChaiScript: Hello, World!
+//
+
+print("Hello, World!")

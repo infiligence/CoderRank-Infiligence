@@ -1,0 +1,9 @@
+;;
+;;  Clojure: Hello, World!
+;;
+
+(ns clojure.ryugod.hello
+   (:gen-class))
+(defn hello-world []
+   (println "Hello, World!"))
+(hello-world)

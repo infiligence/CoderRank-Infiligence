@@ -1,0 +1,12 @@
+(*
+    Seed7: Hello, World!
+    https://github.com/ThomasMertes/seed7
+*)
+
+$ include "seed7_05.s7i";
+  include "stdio.s7i";
+
+const proc: main is func
+begin
+    writeln("Hello, World!");
+end func;

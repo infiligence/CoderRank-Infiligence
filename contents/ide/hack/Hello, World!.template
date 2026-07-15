@@ -1,0 +1,11 @@
+//
+//   Hack: Hello, World!
+//
+
+namespace main;
+
+<<__EntryPoint>>
+function main(): void {
+  echo "Hello, World!\n";
+  exit(0);
+}

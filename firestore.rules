@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Only admins have accounts, so "authenticated" == admin.
+    function isAdmin() { return request.auth != null; }
+
+    match /orgs/{orgId} {
+      allow read: if true;                 // candidates need the college name
+      allow write: if isAdmin();
+
+      match /drives/{driveId} {
+        allow read: if true;               // candidates need timer / placement date
+
+        allow write: if isAdmin();
+
+        // Public question text/options — NO answer keys are stored here.
+        match /questions/{qId} {
+          allow read: if true;
+          allow write: if isAdmin();
+        }
+
+        // Correct answers live here and are readable by admins ONLY.
+        match /answers/{qId} {
+          allow read, write: if isAdmin();
+        }
+
+        // Round 2 problem / misc meta (safe to read).
+        match /meta/{doc} {
+          allow read: if true;
+          allow write: if isAdmin();
+        }
+
+        // Candidate records + their submissions / audit / executions.
+        // Candidates are anonymous (no login). They may register and record
+        // their own progress, but must NOT self-approve for Round 2, and must
+        // NOT write the coding score (that is admin-authoritative).
+        match /candidates/{candId} {
+          allow read: if isAdmin();
+          // Registration: cannot arrive pre-approved / pre-rejected.
+          allow create: if isAdmin() ||
+            (request.resource.data.get('round2Approved', false) == false &&
+             request.resource.data.get('rejected', false) == false);
+          // Progress updates: approval/rejection flags must stay unchanged.
+          allow update: if isAdmin() ||
+            (request.resource.data.get('round2Approved', false) == resource.data.get('round2Approved', false) &&
+             request.resource.data.get('rejected', false) == resource.data.get('rejected', false));
+          allow delete: if isAdmin();
+
+          // Round 1/2 submissions: candidate may write, but NOT the coding score.
+          match /submissions/{sub} {
+            allow read: if isAdmin();
+            allow write: if isAdmin() || !('codingGrades' in request.resource.data);
+          }
+          // Proctoring trail + code executions: candidate writes their own.
+          match /audit/{doc}      { allow read: if isAdmin(); allow write: if true; }
+          match /executions/{doc} { allow read: if isAdmin(); allow write: if true; }
+        }
+      }
+    }
+  }
+}

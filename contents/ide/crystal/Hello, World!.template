@@ -1,0 +1,15 @@
+#
+# Crystal: Hello, World!
+#
+
+class Hello
+  def initialize(@name : String )
+  end
+
+  def run
+    puts "Hello, #{@name}!"
+  end
+end
+
+g = Hello.new("World")
+g.run

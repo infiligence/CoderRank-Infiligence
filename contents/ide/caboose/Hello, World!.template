@@ -1,0 +1,9 @@
+//
+//  Caboose: Hello, World!
+//
+
+fun hello(name) {
+    print("Hello, " + name);
+}
+
+hello("World!");

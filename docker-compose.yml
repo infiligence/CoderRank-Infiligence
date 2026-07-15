@@ -1,0 +1,51 @@
+# Dockerised InfiAssess: UI (static SPA via nginx) + code runner.
+# The UI talks to Firestore directly from the browser, so no backend DB here.
+# The browser calls the runner at http://localhost:5055, which is published below.
+#
+#   docker compose up --build          # build + run both
+#   open http://localhost:8090         # the app
+#
+services:
+  ui:
+    build:
+      context: ./infiassess
+      dockerfile: Dockerfile
+    image: infiassess-ui
+    container_name: infiassess-ui
+    ports:
+      - "8090:80"
+    restart: unless-stopped
+
+  runner:
+    build:
+      context: ./infiassess/runner
+      dockerfile: Dockerfile
+    image: infiassess-runner
+    container_name: infiassess-runner
+    ports:
+      - "5055:5055"
+    restart: unless-stopped
+    # ── Sandbox hardening for executing untrusted candidate code ──────────────
+    # Root FS is read-only; the only writable place is /tmp (where the runner
+    # compiles + runs). Kept exec so compiled binaries can run.
+    read_only: true
+    tmpfs:
+      - /tmp:exec,mode=1777,size=268435456
+    # Persist pushed test cases so they survive restarts.
+    volumes:
+      - runner-data:/data
+    # No privilege escalation, and drop every Linux capability.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Resource guardrails (fork bombs / memory / CPU exhaustion).
+    mem_limit: 1g
+    cpus: 1.0
+    pids_limit: 256
+    # NOTE: network is intentionally NOT disabled here because network_mode:none
+    # would also kill the runner's own :5055 API. Blocking egress from the
+    # executed code needs the per-run ephemeral-container model (see chat).
+
+volumes:
+  runner-data:

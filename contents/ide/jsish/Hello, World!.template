@@ -1,0 +1,8 @@
+/*
+    Jsish: Hello, World!
+    https://github.com/pcmacdon/jsish
+*/
+
+function hello() {printf("Hello, World!\n");}
+
+hello()

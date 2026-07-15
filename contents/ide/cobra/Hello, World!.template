@@ -1,0 +1,7 @@
+/#
+    Cobra: Hello, World!
+#/
+
+class Hello
+    def main
+        print 'Hello, World!'

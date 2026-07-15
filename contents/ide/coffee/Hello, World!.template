@@ -1,0 +1,7 @@
+#
+#   CoffeeScript: Hello, World!
+#
+
+str = "Hello, World!"
+
+console.log(str)

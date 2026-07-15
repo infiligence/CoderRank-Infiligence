@@ -1,0 +1,15 @@
+/*
+    Windows Borland C++ 5.5: Hello, World!
+
+    If you want to download the compiled file, input command "imshow main.exe"
+*/
+#include <iostream>
+
+using namespace std;
+
+int main()
+{
+    cout << "Hello, World!" << endl;
+
+    return 0;
+}

@@ -1,0 +1,9 @@
+//
+//  Opal: Hello, World!
+//
+
+module Hello
+
+fn main () {
+    IO::print("Hello, World!\n")
+}

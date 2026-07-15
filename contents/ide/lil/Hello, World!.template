@@ -1,0 +1,6 @@
+#
+#  Lil: Hello, World!
+#  https://github.com/wsxiaoys/lil
+#
+
+print "Hello, World!"

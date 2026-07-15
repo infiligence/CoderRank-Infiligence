@@ -1,0 +1,5 @@
+#
+#   Coconut: Hello, World!
+#
+
+"Hello, World!" |> print

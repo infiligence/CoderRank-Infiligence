@@ -1,0 +1,7 @@
+# 
+#   Wu: Hello, World!
+# 
+
+print: extern fun(...?)
+
+print("Hello, World!")

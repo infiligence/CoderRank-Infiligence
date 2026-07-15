@@ -1,0 +1,6 @@
+//
+//  Cheddar: Hello, World!
+//  https://github.com/cheddar-lang/Cheddar
+//
+
+print "Hello, World!"

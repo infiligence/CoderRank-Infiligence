@@ -1,0 +1,5 @@
+;
+;   Otus Lisp: Hello, World!
+;
+
+(print "Hello, World!")

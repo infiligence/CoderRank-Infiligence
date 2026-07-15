@@ -1,0 +1,6 @@
+;
+;   Carp: Hello, World!
+;
+
+(defn main []
+    (println* "Hello, World!"))

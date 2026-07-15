@@ -1,0 +1,10 @@
+<svg viewBox="0 0 100 170" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Infiligence">
+  <!-- Top cube (amber) -->
+  <polygon points="50,8 75.98,23 50,38 24.02,23" fill="#FDB515"/>
+  <polygon points="75.98,23 75.98,53 50,68 50,38" fill="#F5871F"/>
+  <polygon points="24.02,23 50,38 50,68 24.02,53" fill="#F9A01B"/>
+  <!-- Bottom cube (pink → purple) -->
+  <polygon points="50,80 84.64,100 50,120 15.36,100" fill="#EC2E76"/>
+  <polygon points="84.64,100 84.64,140 50,160 50,120" fill="#B23283"/>
+  <polygon points="15.36,100 50,120 50,160 15.36,140" fill="#7A3FA3"/>
+</svg>

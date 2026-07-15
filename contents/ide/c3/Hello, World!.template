@@ -1,0 +1,14 @@
+/*
+    C3: Hello, World!
+    http://www.c3-lang.org/
+*/
+
+module main;
+
+import std::io;
+
+fn int main(int argc, char** argv) 
+{
+    io::print("Hello, World!\n");
+    return 0;
+}
