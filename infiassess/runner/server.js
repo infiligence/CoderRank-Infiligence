@@ -19,7 +19,9 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 
-const PORT = process.env.RUNNER_PORT || 5055
+// Cloud Run (and most PaaS) inject PORT — honour it first, then RUNNER_PORT for
+// local docker-compose, then the default.
+const PORT = process.env.PORT || process.env.RUNNER_PORT || 5055
 const ADMIN_TOKEN = process.env.RUNNER_ADMIN_TOKEN || 'infiassess-runner-admin'
 const RUN_TIMEOUT_MS = 5000
 const COMPILE_TIMEOUT_MS = 10000
