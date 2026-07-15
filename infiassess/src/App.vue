@@ -35,7 +35,9 @@
 
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+/* Base rem scale — trimmed from the 16px default so rem-based type across the
+   app reads a touch smaller / more "normal". */
+html { scroll-behavior: smooth; font-size: 14.5px; }
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

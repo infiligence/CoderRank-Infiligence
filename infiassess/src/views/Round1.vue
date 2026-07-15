@@ -282,16 +282,24 @@
                   </div>
                 </div>
 
-                <div class="code-label mb-2">
+                <div class="code-label mb-2 d-flex align-center">
                   <v-icon small color="secondary" class="mr-1">mdi-code-braces</v-icon>
-                  <span class="caption" style="color:#111111">
-                    Your Solution<template v-if="currentQuestion.language"> ({{ currentQuestion.language }})</template>
-                  </span>
+                  <span class="caption" style="color:#111111">Your Solution</span>
+                  <v-spacer />
+                  <span class="caption mr-2" style="color:rgba(17,17,17,0.5)">Language</span>
+                  <v-select
+                    :value="codeLangs[currentQuestion.id]"
+                    @change="v => onLangChange(currentQuestion.id, v)"
+                    :items="langOptions"
+                    dense outlined hide-details
+                    class="lang-select"
+                    style="max-width:170px"
+                  />
                 </div>
                 <div class="ia-editor-area">
                   <code-editor
                     :value="answers[currentQuestion.id] || ''"
-                    :language="monacoLang(currentQuestion.language)"
+                    :language="monacoLang(codeLangs[currentQuestion.id] || currentQuestion.language)"
                     theme="vs"
                     @input="v => onCodeInput(currentQuestion.id, v)"
                   />
@@ -488,6 +496,14 @@ export default {
       submittedSections: [],  // section keys already submitted (locked)
       selection: {},          // { sectionKey: [question objects] } — per-candidate random sample
       answers: {},            // { [questionId]: value }
+      codeLangs: {},          // { [questionId]: runner language id } for coding questions
+      langOptions: [
+        { text: 'C', value: 'c' },
+        { text: 'C++', value: 'cpp' },
+        { text: 'Python', value: 'python' },
+        { text: 'JavaScript', value: 'javascript' },
+        { text: 'Java', value: 'java' },
+      ],
       startTime: null,
       deadline: null,         // absolute ms timestamp when Round 1 ends
       auditEvents: [],        // collected locally until submit
@@ -598,6 +614,8 @@ export default {
           this.$set(this.answers, q.id, [])
         } else if (q.type === 'code') {
           this.$set(this.answers, q.id, q.starterCode || '')
+          // Default the editor language to the question's suggested language.
+          this.$set(this.codeLangs, q.id, firebaseService.runnerLang(q.language))
         } else {
           this.$set(this.answers, q.id, '')
         }
@@ -615,6 +633,7 @@ export default {
           // Resume timed assessment with the SAME sampled questions, answers & position.
           this.restoreSelection(session.selectionIds || {})
           if (session.answers) this.answers = { ...this.answers, ...session.answers }
+          if (session.codeLangs) this.codeLangs = { ...this.codeLangs, ...session.codeLangs }
           this.submittedSections = session.submittedSections || []
           this.sectionIndex = session.sectionIndex || 0
           this.currentIndex = session.currentIndex || 0
@@ -688,6 +707,7 @@ export default {
         startTime: this.startTime,
         deadline: this.deadline,
         answers: this.answers,
+        codeLangs: this.codeLangs,
         currentIndex: this.currentIndex,
         sectionIndex: this.sectionIndex,
         submittedSections: this.submittedSections,
@@ -834,6 +854,7 @@ export default {
       Object.keys(this.selection).forEach(k => { selectionIds[k] = this.selection[k].map(q => q.id) })
       await firebaseService.saveRound1Progress(this.orgSlug, this.driveId, this.candidate.email, {
         answers: { ...this.answers },
+        codeLanguages: { ...this.codeLangs },
         selectionIds,
         submittedSections: [...this.submittedSections],
         startTime: this.startTime,
@@ -872,6 +893,7 @@ export default {
       try {
         await firebaseService.submitRound1(this.orgSlug, this.driveId, this.candidate.email, {
           answers: { ...this.answers },
+          codeLanguages: { ...this.codeLangs },
           selectionIds,
           submittedSections: [...this.submittedSections],
           startTime: this.startTime,
@@ -911,6 +933,11 @@ export default {
     onCodeInput(id, value) {
       this.$set(this.answers, id, value)
     },
+    onLangChange(id, lang) {
+      this.$set(this.codeLangs, id, lang)
+      this.runResult = null
+      if (this.phase === 'assessment') this.saveSession()
+    },
 
     // Compile & run the candidate's code against this question's sample input.
     async runCode() {
@@ -918,7 +945,8 @@ export default {
       if (!q || this.running) return
       const code = this.answers[q.id] || ''
       if (!code.trim()) { this.runResult = { error: 'Write some code first.' }; return }
-      const language = this.monacoLang(q.language)
+      // Use the candidate's selected language (falls back to the question's).
+      const language = this.codeLangs[q.id] || firebaseService.runnerLang(q.language)
       this.running = true
       this.runResult = null
       try {

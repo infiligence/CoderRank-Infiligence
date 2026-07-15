@@ -301,6 +301,18 @@ const Round1AnswersPanel = {
       const m = { single: { bg: 'rgba(17,17,17,0.15)', text: '#111111' }, mcq: { bg: 'rgba(17,17,17,0.15)', text: '#111111' }, text: { bg: 'rgba(255,183,77,0.15)', text: '#ffb74d' }, code: { bg: 'rgba(76,175,80,0.15)', text: '#4caf50' } }
       return m[type] || m.text
     },
+    // Section score label. Coding is scored in marks (not correct/total);
+    // MCQ/single sections show correct/total.
+    secScore(s, compact) {
+      const sc = s.score || {}
+      const isCoding = s.details && s.details.some(d => d.type === 'code')
+      if (isCoding) {
+        if (compact) return `${sc.marks || 0}/${sc.maxMarks || 0}`
+        const suffix = sc.pending ? ` · ${sc.pending} pending` : ''
+        return `${sc.marks || 0} / ${sc.maxMarks || 0} marks${suffix}`
+      }
+      return sc.total ? `${sc.correct}${compact ? '/' : ' / '}${sc.total}` : (compact ? '—' : '—')
+    },
   },
   template: `
     <div>
@@ -325,7 +337,7 @@ const Round1AnswersPanel = {
           <div class="overview-sections">
             <div v-for="s in sectionGroups" :key="s.key" class="overview-sec-chip">
               <span class="overview-sec-label">{{ s.label }}</span>
-              <span class="overview-sec-val">{{ s.score.total ? (s.score.correct + '/' + s.score.total) : 'review' }}</span>
+              <span class="overview-sec-val">{{ secScore(s, true) }}</span>
             </div>
           </div>
         </div>
@@ -337,7 +349,7 @@ const Round1AnswersPanel = {
             <span class="review-section-title">{{ s.label }}</span>
             <v-chip x-small class="ml-2" color="rgba(17,17,17,0.06)" text-color="rgba(17,17,17,0.6)">{{ s.details.length }}</v-chip>
             <v-spacer />
-            <span class="review-section-score">{{ s.score.total ? (s.score.correct + ' / ' + s.score.total) : 'code' }}</span>
+            <span class="review-section-score">{{ secScore(s, false) }}</span>
           </div>
           <div v-show="isOpen(s.key)" class="answers-list mt-3">
             <div v-for="(d, di) in s.details" :key="di" class="answer-item" :class="{ 'answer-item--wide': d.type === 'code' }">
@@ -364,7 +376,7 @@ const Round1AnswersPanel = {
               <div class="answer-q-text mt-1">{{ d.question.text }}</div>
               <!-- Code answer -->
               <template v-if="d.type === 'code'">
-                <div class="ans-label mt-2">Candidate's code<template v-if="d.question.language"> ({{ d.question.language }})</template></div>
+                <div class="ans-label mt-2">Candidate's code<template v-if="d.language"> ({{ d.language }})</template></div>
                 <pre class="code-block-sm">{{ d.given || '(no answer)' }}</pre>
 
                 <!-- Test-case grading -->
@@ -636,9 +648,9 @@ export default {
       if (!q || this.gradingId) return
       this.gradingId = q.id
       try {
-        const res = await firebaseService.gradeCoding(
-          RUNNER_URL, q, code, firebaseService.runnerLang(q.language)
-        )
+        const r1 = this.candidate && this.candidate.round1Data
+        const lang = (r1 && r1.codeLanguages && r1.codeLanguages[q.id]) || firebaseService.runnerLang(q.language)
+        const res = await firebaseService.gradeCoding(RUNNER_URL, q, code, lang)
         this.$set(this.codingResults, q.id, res)
         if (res.total > 0 && !res.results.some(r => r.error === 'Runner not reachable')) {
           // Persist so the score/leaderboard reflect it, and refresh locally.

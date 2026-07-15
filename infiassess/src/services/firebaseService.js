@@ -1,7 +1,7 @@
 import { db, auth } from '../firebase'
 import {
   collection, doc, getDoc, getDocs, addDoc, setDoc,
-  updateDoc, deleteDoc, query, orderBy, serverTimestamp, where, onSnapshot
+  updateDoc, deleteDoc, query, orderBy, serverTimestamp, where, onSnapshot, writeBatch
 } from 'firebase/firestore'
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth'
 
@@ -260,13 +260,21 @@ export const firebaseService = {
     if (isFirebaseConfigured()) {
       const qCol = collection(db, 'orgs', orgId, 'drives', driveId, 'questions')
       const aCol = collection(db, 'orgs', orgId, 'drives', driveId, 'answers')
-      for (const d of (await getDocs(qCol)).docs) await deleteDoc(d.ref)
-      for (const d of (await getDocs(aCol)).docs) await deleteDoc(d.ref)
+      // Batched writes — far faster than sequential setDoc/deleteDoc and atomic
+      // per chunk (Firestore caps a batch at 500 ops, so chunk at 450).
+      const ops = []
+      for (const d of (await getDocs(qCol)).docs) ops.push(b => b.delete(d.ref))
+      for (const d of (await getDocs(aCol)).docs) ops.push(b => b.delete(d.ref))
       for (const q of publicQs) {
         const { id, ...data } = q
         const qid = id || `q_${Date.now()}_${Math.floor(Math.random() * 1e4)}`
-        await setDoc(doc(db, 'orgs', orgId, 'drives', driveId, 'questions', qid), data)
-        await setDoc(doc(db, 'orgs', orgId, 'drives', driveId, 'answers', qid), answers[q.id] || {})
+        ops.push(b => b.set(doc(db, 'orgs', orgId, 'drives', driveId, 'questions', qid), data))
+        ops.push(b => b.set(doc(db, 'orgs', orgId, 'drives', driveId, 'answers', qid), answers[q.id] || {}))
+      }
+      for (let i = 0; i < ops.length; i += 450) {
+        const batch = writeBatch(db)
+        ops.slice(i, i + 450).forEach(fn => fn(batch))
+        await batch.commit()
       }
       return questions
     }
@@ -439,6 +447,7 @@ export const firebaseService = {
     if (!round1Data || !round1Data.answers) return result
     const answers = round1Data.answers
     const codingGrades = round1Data.codingGrades || {}
+    const codeLanguages = round1Data.codeLanguages || {}
     const byId = {}
     questions.forEach(q => { byId[q.id] = q })
 
@@ -477,32 +486,42 @@ export const firebaseService = {
         correct = null
       }
       const sk = q.section || 'logical'
-      if (!result.sections[sk]) result.sections[sk] = { correct: 0, total: 0 }
+      if (!result.sections[sk]) result.sections[sk] = { correct: 0, total: 0, marks: 0, maxMarks: 0, graded: 0, pending: 0 }
+      const sec = result.sections[sk]
 
       // ── Marks ──
       let marks = null
       let codingGrade = null
       if (q.type === 'single' || q.type === 'mcq') {
         result.maxMarks += this.MARKS[q.type]
+        sec.maxMarks += this.MARKS[q.type]
         marks = correct ? this.MARKS[q.type] : 0
         result.marks += marks
+        sec.marks += marks
         if (correct !== null) {
           result.total++
-          result.sections[sk].total++
-          if (correct) { result.correct++; result.sections[sk].correct++ }
+          sec.total++
+          if (correct) { result.correct++; sec.correct++ }
         }
       } else if (q.type === 'code') {
         result.maxMarks += this.MARKS.code
+        sec.maxMarks += this.MARKS.code
         codingGrade = codingGrades[q.id] || null
         if (codingGrade && codingGrade.total) {
           marks = Math.round((codingGrade.passed / codingGrade.total) * this.MARKS.code * 10) / 10
           result.marks += marks
-        } // else marks stays null → "pending grade"
+          sec.marks += marks
+          sec.graded++
+        } else {
+          sec.pending++ // not graded yet
+        }
       }
 
-      result.details.push({ question: q, section: sk, type: q.type, given, expected, correct, marks, codingGrade, rawAnswer: ans })
+      const language = q.type === 'code' ? (codeLanguages[q.id] || q.language || '') : (q.language || '')
+      result.details.push({ question: q, section: sk, type: q.type, given, expected, correct, marks, codingGrade, rawAnswer: ans, language })
     })
     result.marks = Math.round(result.marks * 10) / 10
+    Object.values(result.sections).forEach(s => { s.marks = Math.round(s.marks * 10) / 10 })
     return result
   },
 

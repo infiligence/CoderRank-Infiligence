@@ -212,6 +212,10 @@
                   </v-chip>
                 </div>
                 <div class="d-flex align-center" style="gap:8px">
+                  <v-btn v-if="questionsBySection(section.key).length" outlined x-small color="error"
+                    class="action-top-btn" @click="confirmDeleteSection(section.key)">
+                    <v-icon left x-small>mdi-delete-sweep-outline</v-icon> Delete all
+                  </v-btn>
                   <v-btn outlined x-small color="secondary" class="action-top-btn" @click="openJsonUpload(section.key)">
                     <v-icon left x-small>mdi-code-json</v-icon> Upload JSON
                   </v-btn>
@@ -252,6 +256,32 @@
                           <v-icon x-small color="#4caf50">mdi-check-circle-outline</v-icon>
                           Expected: {{ q.sampleOutput }}
                         </span>
+                      </div>
+
+                      <!-- Coding test cases (admin-only): shows visible vs hidden -->
+                      <div v-if="q.type === 'code'" class="tc-block mt-2">
+                        <template v-if="q.testCases && q.testCases.length">
+                          <div class="tc-block-head">
+                            <v-icon x-small>mdi-flask-outline</v-icon>
+                            {{ q.testCases.length }} test case{{ q.testCases.length !== 1 ? 's' : '' }}
+                            <span class="tc-dot tc-dot-vis">{{ visibleCount(q) }} visible</span>
+                            <span class="tc-dot tc-dot-hid">{{ q.testCases.length - visibleCount(q) }} hidden</span>
+                          </div>
+                          <div v-for="(tc, ti) in q.testCases" :key="ti" class="tc-row">
+                            <v-chip x-small class="tc-vis-chip"
+                              :color="tc.visible ? 'rgba(22,163,74,0.12)' : 'rgba(17,17,17,0.06)'"
+                              :text-color="tc.visible ? '#16A34A' : 'rgba(17,17,17,0.5)'">
+                              <v-icon x-small left>{{ tc.visible ? 'mdi-eye-outline' : 'mdi-eye-off-outline' }}</v-icon>
+                              {{ tc.visible ? 'Visible' : 'Hidden' }}
+                            </v-chip>
+                            <span class="tc-io"><span class="tc-io-lbl">in</span><code>{{ tc.input }}</code></span>
+                            <span class="tc-io"><span class="tc-io-lbl">out</span><code>{{ tc.output }}</code></span>
+                          </div>
+                        </template>
+                        <div v-else class="tc-empty">
+                          <v-icon x-small color="#DC2626">mdi-alert-circle-outline</v-icon>
+                          No test cases uploaded for this question
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -573,9 +603,28 @@
         </v-card-text>
         <v-card-actions class="pa-6 pt-0">
           <v-spacer />
-          <v-btn text @click="jsonUpload.show = false">Cancel</v-btn>
-          <v-btn color="primary" @click="importQuestionsJson">
+          <v-btn text :disabled="jsonUpload.importing" @click="jsonUpload.show = false">Cancel</v-btn>
+          <v-btn color="primary" :loading="jsonUpload.importing" @click="importQuestionsJson">
             <v-icon left>mdi-upload</v-icon> Import & Replace
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Delete-all confirmation -->
+    <v-dialog v-model="deleteSection.show" max-width="440" persistent>
+      <v-card class="pa-2">
+        <v-card-title class="text-h6">Delete all questions?</v-card-title>
+        <v-card-text>
+          This permanently removes <strong>all {{ deleteSection.count }}</strong>
+          question{{ deleteSection.count !== 1 ? 's' : '' }} (and their answer keys / test cases)
+          from the <strong>{{ deleteSection.label }}</strong> section. This cannot be undone.
+        </v-card-text>
+        <v-card-actions class="pa-4 pt-0">
+          <v-spacer />
+          <v-btn text :disabled="deleteSection.busy" @click="deleteSection.show = false">Cancel</v-btn>
+          <v-btn color="error" depressed :loading="deleteSection.busy" @click="deleteAllInSection">
+            <v-icon left>mdi-delete-sweep-outline</v-icon> Delete all
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -610,7 +659,8 @@ export default {
       driveId: this.$route.params.driveId,
       org: null,
       drive: null,
-      jsonUpload: { show: false, text: '', error: '', preview: null, section: 'logical', sectionLabel: '' },
+      jsonUpload: { show: false, text: '', error: '', preview: null, section: 'logical', sectionLabel: '', importing: false },
+      deleteSection: { show: false, section: null, label: '', count: 0, busy: false },
       expandedSections: { logical: true, problem: true, coding: true },
       candidates: [],
       questions: [],
@@ -697,44 +747,67 @@ export default {
     toggleSection(key) {
       this.$set(this.expandedSections, key, !this.isExpanded(key))
     },
-    // Admin-authoritative coding grading: run every submitted candidate's code
-    // against the runner's stored (hidden) test cases and persist the score.
+    // Admin-authoritative coding grading core. Grades submitted candidates' code
+    // against the real (admin-only) test cases via /batch, persists the score,
+    // and recomputes their total in-memory (no full reload → no loop).
+    //   pendingOnly: skip questions already graded (used by background auto-grade)
+    async _runCodingGrading({ pendingOnly }) {
+      const byId = {}
+      this.questions.forEach(q => { byId[q.id] = q })
+      const submitted = this.candidates.filter(c => c.round1Data && c.round1Data.answers)
+      let graded = 0
+      let runnerMissing = false
+      const touched = new Set()
+      for (const c of submitted) {
+        const codingIds = (c.round1Data.selectionIds && c.round1Data.selectionIds.coding) || []
+        for (const qid of codingIds) {
+          const existing = (c.round1Data.codingGrades || {})[qid]
+          if (pendingOnly && existing && existing.total) continue
+          const q = byId[qid]
+          if (!q || !(q.testCases && q.testCases.length)) continue
+          const code = c.round1Data.answers[qid] || ''
+          const lang = (c.round1Data.codeLanguages && c.round1Data.codeLanguages[qid]) || firebaseService.runnerLang(q.language)
+          try {
+            const res = await firebaseService.gradeCoding(RUNNER_URL, q, code, lang)
+            if (res.results.some(r => r.error === 'Runner not reachable')) { runnerMissing = true; continue }
+            const grade = { passed: res.passed, total: res.total }
+            await firebaseService.saveCandidateCodingGrade(this.orgId, this.driveId, c.email, qid, grade)
+            this.$set(c.round1Data, 'codingGrades', { ...(c.round1Data.codingGrades || {}), [qid]: grade })
+            graded++; touched.add(c)
+          } catch (e) { runnerMissing = true }
+        }
+      }
+      touched.forEach(c => {
+        const idx = this.candidates.indexOf(c)
+        if (idx >= 0) this.$set(this.candidates, idx, { ...c, round1Score: firebaseService.gradeRound1(c.round1Data, this.questions) })
+      })
+      return { graded, runnerMissing }
+    },
+    // Manual "Grade all coding" button.
     async gradeAllCoding() {
       if (this.gradingAll) return
       this.gradingAll = true
       try {
-        // this.questions carries the real (admin-only) test cases; grade with
-        // those via /batch so a poisoned runner store can't affect scores.
-        const byId = {}
-        this.questions.forEach(q => { byId[q.id] = q })
-        const submitted = this.candidates.filter(c => c.round1Data && c.round1Data.answers)
-        let n = 0
-        let runnerMissing = false
-        for (const c of submitted) {
-          const codingIds = (c.round1Data.selectionIds && c.round1Data.selectionIds.coding) || []
-          for (const qid of codingIds) {
-            const q = byId[qid]
-            if (!q || !(q.testCases && q.testCases.length)) continue
-            const code = c.round1Data.answers[qid] || ''
-            try {
-              const res = await firebaseService.gradeCoding(RUNNER_URL, q, code, firebaseService.runnerLang(q.language))
-              if (res.results.some(r => r.error === 'Runner not reachable')) { runnerMissing = true; continue }
-              await firebaseService.saveCandidateCodingGrade(this.orgId, this.driveId, c.email, qid, { passed: res.passed, total: res.total })
-            } catch (e) { runnerMissing = true }
-          }
-          n++
-        }
+        const { graded, runnerMissing } = await this._runCodingGrading({ pendingOnly: false })
         if (runnerMissing) {
           this.showSnackbar('Runner unreachable or missing test cases — re-save questions & ensure the runner is up', 'error')
         } else {
-          this.showSnackbar(`Graded coding for ${n} candidate${n !== 1 ? 's' : ''}`, 'success')
+          this.showSnackbar(`Graded ${graded} coding answer${graded !== 1 ? 's' : ''}`, 'success')
         }
-        await this.loadAll()
       } catch (e) {
         this.showSnackbar('Grading failed', 'error')
       } finally {
         this.gradingAll = false
       }
+    },
+    // Background auto-grade: runs on load (incl. realtime subscription after a
+    // candidate submits) so coding marks appear without opening each candidate.
+    async autoGradePendingCoding() {
+      if (this.gradingAll) return
+      this.gradingAll = true
+      try { await this._runCodingGrading({ pendingOnly: true }) }
+      catch (e) { /* silent — retries on next load */ }
+      finally { this.gradingAll = false }
     },
     r1StatusChip(item) {
       if (item.round1Status === 'submitted') {
@@ -750,9 +823,33 @@ export default {
         .filter(q => (q.section || 'logical') === key)
         .sort((a, b) => (a.order || 0) - (b.order || 0))
     },
+    visibleCount(q) {
+      return (q.testCases || []).filter(tc => tc.visible).length
+    },
+    // ── Bulk delete a whole section ───────────────────────────────────────
+    confirmDeleteSection(section) {
+      this.deleteSection = {
+        show: true, section, label: this.sectionLabel(section),
+        count: this.questionsBySection(section).length, busy: false,
+      }
+    },
+    async deleteAllInSection() {
+      const section = this.deleteSection.section
+      this.deleteSection.busy = true
+      try {
+        this.questions = this.questions.filter(q => (q.section || 'logical') !== section)
+        await this.persistQuestions()
+        this.deleteSection.show = false
+        this.showSnackbar(`Deleted all ${this.deleteSection.label} questions`, 'success')
+      } catch (e) {
+        this.showSnackbar(`Delete failed: ${e && e.message ? e.message : e}`, 'error')
+      } finally {
+        this.deleteSection.busy = false
+      }
+    },
     // ── JSON question upload (per section) ────────────────────────────────
     openJsonUpload(section) {
-      this.jsonUpload = { show: true, text: '', error: '', preview: null, section, sectionLabel: this.sectionLabel(section) }
+      this.jsonUpload = { show: true, text: '', error: '', preview: null, section, sectionLabel: this.sectionLabel(section), importing: false }
     },
     async importQuestionsJson() {
       let parsed
@@ -774,12 +871,15 @@ export default {
       const label = this.jsonUpload.sectionLabel
       const count = normalized.length
       this.questions = [...others, ...normalized]
+      this.jsonUpload.importing = true
       try {
         await this.persistQuestions()
         this.jsonUpload.show = false
         this.showSnackbar(`Imported ${count} question${count !== 1 ? 's' : ''} into ${label}`, 'success')
       } catch (e) {
         this.jsonUpload.error = `Save failed: ${e && e.message ? e.message : e}`
+      } finally {
+        this.jsonUpload.importing = false
       }
     },
     async copyAssessmentUrl() {
@@ -838,6 +938,9 @@ export default {
       } finally {
         this.loading = false
       }
+      // Auto-grade any ungraded coding for submitted candidates (fires on load
+      // and via the realtime subscription right after a candidate submits).
+      this.autoGradePendingCoding()
     },
     openAddQuestion(section) {
       this.editingId = null
@@ -877,8 +980,13 @@ export default {
     },
     async saveQuestion() {
       if (!this.$refs.questionForm.validate()) return
+      const idx = this.editingId ? this.questions.findIndex(x => x.id === this.editingId) : -1
+      // Preserve fields the form doesn't edit (coding testCases, sampleInput/Output,
+      // language, etc.) so editing a coding question never wipes its test cases.
+      const existing = idx >= 0 ? this.questions[idx] : {}
       const q = {
-        id: this.questionDraft.id || `q_${this.questionDraft.section}_${Date.now()}`,
+        ...existing,
+        id: this.questionDraft.id || existing.id || `q_${this.questionDraft.section}_${Date.now()}`,
         section: this.questionDraft.section || 'logical',
         text: this.questionDraft.text,
         type: this.questionDraft.type,
@@ -890,7 +998,6 @@ export default {
         ...(this.questionDraft.type === 'mcq' && { correctAnswers: this.questionDraft.correctAnswers }),
         ...(this.questionDraft.type === 'code' && { starterCode: this.questionDraft.starterCode }),
       }
-      const idx = this.editingId ? this.questions.findIndex(x => x.id === this.editingId) : -1
       if (idx >= 0) {
         this.$set(this.questions, idx, q)
       } else {
@@ -1336,6 +1443,28 @@ export default {
   color: #4caf50;
   font-weight: 600;
 }
+/* Coding test-case display (admin) */
+.tc-block { border-left: 2px solid rgba(17,17,17,0.08); padding-left: 10px; }
+.tc-block-head {
+  font-size: 0.72rem; font-weight: 700; color: rgba(17,17,17,0.55);
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+}
+.tc-dot { font-weight: 600; }
+.tc-dot-vis { color: #16A34A; }
+.tc-dot-hid { color: rgba(17,17,17,0.45); }
+.tc-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 2px 0; font-size: 0.75rem; min-width: 0;
+}
+.tc-vis-chip { flex: 0 0 auto; }
+.tc-io { display: inline-flex; align-items: baseline; gap: 5px; min-width: 0; overflow: hidden; }
+.tc-io-lbl { color: rgba(17,17,17,0.4); font-weight: 600; }
+.tc-io code {
+  background: rgba(17,17,17,0.04); border-radius: 4px; padding: 1px 6px;
+  font-size: 0.72rem; color: #111; white-space: pre; overflow-x: auto;
+  max-width: 260px; display: inline-block; vertical-align: bottom;
+}
+.tc-empty { font-size: 0.75rem; color: #DC2626; font-weight: 600; display: flex; align-items: center; gap: 5px; }
 .section-empty {
   color: rgba(17, 17, 17, 0.4);
   font-size: 0.85rem;
