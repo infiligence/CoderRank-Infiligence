@@ -934,9 +934,11 @@ export default {
         ])
         this.org = org || { id: this.orgId, name: this.orgId }
         this.drive = drive || { id: this.driveId, name: this.driveId, round1Timer: 45, round2Timer: 60, placementDate: new Date().toISOString().slice(0, 10), round1Active: true, round2Active: false }
-        this.settings = { round1Counts: { logical: 10, problem: 10, coding: 5 }, ...this.drive }
-        if (!this.settings.round1Counts) this.settings.round1Counts = { logical: 10, problem: 10, coding: 5 }
-        if (!Array.isArray(this.settings.departments)) this.settings.departments = []
+        // Keep departments/round1Counts in the initial literal so they're reactive
+        // (Vue 2 can't observe properties added after the object is created).
+        this.settings = { round1Counts: { logical: 10, problem: 10, coding: 5 }, departments: [], ...this.drive }
+        if (!this.settings.round1Counts) this.$set(this.settings, 'round1Counts', { logical: 10, problem: 10, coding: 5 })
+        if (!Array.isArray(this.settings.departments)) this.$set(this.settings, 'departments', [])
         this.questions = questions.sort((a, b) => (a.order || 0) - (b.order || 0))
         this.problem = { ...{ title: '', description: '', starterCode: {} }, ...problem }
 
@@ -1388,6 +1390,13 @@ export default {
 .sg-empty { font-size: 0.82rem; color: rgba(17,17,17,0.4); margin-bottom: 12px; }
 .dept-row { display: flex; align-items: center; margin-bottom: 10px; }
 .dept-field { max-width: 520px; }
+/* Match settings input type scale to the rest of the UI */
+.settings-stack >>> input,
+.settings-stack >>> .v-select__selection,
+.settings-stack >>> .v-select__selection--comma { font-size: 0.9rem; }
+.settings-stack >>> .v-label { font-size: 0.9rem; }
+.settings-stack >>> .v-text-field__prefix,
+.settings-stack >>> .v-text-field__suffix { font-size: 0.9rem; }
 .section-label {
   font-size: 0.78rem;
   font-weight: 600;
