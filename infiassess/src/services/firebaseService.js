@@ -568,18 +568,57 @@ export const firebaseService = {
       email: key, // composite key used as the stable candidate id
       orgId, driveId, registeredAt: Date.now(), round1Status: 'pending', round2Approved: false,
     }
+    // Anti-malpractice: one active attempt per roll. A roll that has already
+    // STARTED or SUBMITTED cannot be re-registered from another device/session.
+    // (A 'pending' doc — registered but never started — may re-register, so a
+    // pre-start refresh on a fresh browser still works.) Candidates can't READ
+    // candidate docs (PII), so the block is enforced by the security rules: the
+    // overwrite (which sets round1Status back to 'pending') is denied for a
+    // started/submitted roll, surfacing here as permission-denied.
+    const takenError = () => {
+      const e = new Error('This roll number has already started or completed the assessment. If you believe this is a mistake, contact the invigilator.')
+      e.code = 'already-taken'; return e
+    }
     if (isFirebaseConfigured()) {
-      await setDoc(doc(db, 'orgs', orgId, 'drives', driveId, 'candidates', key), candidateData)
+      const ref = doc(db, 'orgs', orgId, 'drives', driveId, 'candidates', key)
+      try {
+        await setDoc(ref, candidateData)
+      } catch (e) {
+        if (e && (e.code === 'permission-denied' || /permission/i.test(String(e && e.message)))) throw takenError()
+        throw e
+      }
       return { id: key, ...candidateData }
     }
-    // localStorage
+    // localStorage (no rules) — enforce the same policy directly.
     const scope = `${orgId}__${driveId}`
     const candidates = await this.getDriveCandidates(orgId, driveId)
-    if (!candidates.find(c => c.id === key)) {
+    const found = candidates.find(c => c.id === key)
+    if (found && (found.round1Status === 'in_progress' || found.round1Status === 'submitted')) throw takenError()
+    if (!found) {
       candidates.push({ id: key, ...candidateData })
       localStorage.setItem(`ia_dc_${scope}`, JSON.stringify(candidates))
     }
     return { id: key, ...candidateData }
+  },
+
+  // Record that a candidate has started Round 1 (server-side), so a second
+  // device using the same roll is blocked at registration from that moment.
+  async markRound1Started(orgId, driveId, email) {
+    if (isFirebaseConfigured()) {
+      try {
+        await updateDoc(doc(db, 'orgs', orgId, 'drives', driveId, 'candidates', email), {
+          round1Status: 'in_progress', round1StartedAt: Date.now(),
+        })
+      } catch (e) { /* non-fatal: display/logic falls back to submitTime */ }
+      return
+    }
+    const scope = `${orgId}__${driveId}`
+    const candidates = await this.getDriveCandidates(orgId, driveId)
+    const idx = candidates.findIndex(c => c.id === email)
+    if (idx >= 0 && candidates[idx].round1Status === 'pending') {
+      candidates[idx].round1Status = 'in_progress'
+      localStorage.setItem(`ia_dc_${scope}`, JSON.stringify(candidates))
+    }
   },
 
   async checkRound2Approval(orgId, driveId, email) {

@@ -1148,8 +1148,10 @@ export default {
     let firstSnapshot = true
     this._unsub = firebaseService.subscribeCandidates(this.orgId, this.driveId, () => {
       if (firstSnapshot) { firstSnapshot = false; return } // initial load already done
+      // Debounced so a burst of candidate writes (200+ live) doesn't thrash the
+      // table / re-read everything every snapshot.
       clearTimeout(this._reloadTimer)
-      this._reloadTimer = setTimeout(() => { if (!this.gradingAll) this.loadAll() }, 800)
+      this._reloadTimer = setTimeout(() => { if (!this.gradingAll) this.loadAll() }, 4000)
     })
   },
   beforeDestroy() {

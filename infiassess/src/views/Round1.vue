@@ -72,6 +72,9 @@
                 hide-details="auto"
                 :rules="[v => !!v || 'Roll number is required']"
               />
+              <v-alert v-if="regError" type="error" dense text class="mb-4 text-left" style="font-size:0.85rem">
+                {{ regError }}
+              </v-alert>
               <v-btn
                 type="submit"
                 color="primary"
@@ -504,6 +507,7 @@ export default {
 
       // Entry form
       form: { name: '', department: '', collegeName: '', rollNumber: '' },
+      regError: '',
 
       // Assessment state
       currentIndex: 0,        // index within the current section
@@ -784,6 +788,7 @@ export default {
     async registerCandidate() {
       if (!this.$refs.entryForm.validate()) return
       this.loading = true
+      this.regError = ''
       try {
         const candidate = await firebaseService.registerCandidate(this.orgSlug, this.driveId, {
           name: this.form.name.trim(),
@@ -797,6 +802,7 @@ export default {
         this.saveSession()
       } catch (e) {
         console.error('Registration error', e)
+        this.regError = e && e.message ? e.message : 'Could not register. Please try again or contact the invigilator.'
       } finally {
         this.loading = false
       }
@@ -805,6 +811,8 @@ export default {
     // ── Start round ─────────────────────────────────────────────────────────
     async startRound() {
       this.loading = true
+      // Mark started server-side so a second device with the same roll is blocked.
+      firebaseService.markRound1Started(this.orgSlug, this.driveId, this.candidate.email)
       this.buildSelection()          // sample this candidate's random question set
       this.sectionIndex = 0
       this.currentIndex = 0

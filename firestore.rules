@@ -41,16 +41,24 @@ service cloud.firestore {
           allow create: if isAdmin() ||
             (request.resource.data.get('round2Approved', false) == false &&
              request.resource.data.get('rejected', false) == false);
-          // Progress updates: approval/rejection flags must stay unchanged.
+          // Progress updates: approval/rejection flags must stay unchanged, AND a
+          // roll that has already STARTED or SUBMITTED cannot be reset to 'pending'
+          // (blocks re-registration / a second device taking the same roll).
           allow update: if isAdmin() ||
             (request.resource.data.get('round2Approved', false) == resource.data.get('round2Approved', false) &&
-             request.resource.data.get('rejected', false) == resource.data.get('rejected', false));
+             request.resource.data.get('rejected', false) == resource.data.get('rejected', false) &&
+             !(resource.data.get('round1Status', 'pending') in ['in_progress', 'submitted'] &&
+               request.resource.data.get('round1Status', 'pending') == 'pending'));
           allow delete: if isAdmin();
 
-          // Round 1/2 submissions: candidate may write, but NOT the coding score.
+          // Round 1/2 submissions: candidate may write, but NOT the coding score,
+          // and NOT overwrite a submission that has already been finalized.
           match /submissions/{sub} {
             allow read: if isAdmin();
-            allow write: if isAdmin() || !('codingGrades' in request.resource.data);
+            allow create: if isAdmin() || !('codingGrades' in request.resource.data);
+            allow update: if isAdmin() ||
+              (!('codingGrades' in request.resource.data) &&
+               !('submitTime' in resource.data));
           }
           // Proctoring trail + code executions: candidate writes their own.
           match /audit/{doc}      { allow read: if isAdmin(); allow write: if true; }
