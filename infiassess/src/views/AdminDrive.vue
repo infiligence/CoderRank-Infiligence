@@ -677,7 +677,7 @@ export default {
       drive: null,
       jsonUpload: { show: false, text: '', error: '', preview: null, section: 'logical', sectionLabel: '', importing: false },
       deleteSection: { show: false, section: null, label: '', count: 0, busy: false },
-      expandedSections: { logical: true, problem: true, coding: true },
+      expandedSections: {}, // sections start collapsed; expand on click
       candidates: [],
       questions: [],
       problem: { title: '', description: '', starterCode: {} },
@@ -758,7 +758,7 @@ export default {
       return s ? s.label : key
     },
     isExpanded(key) {
-      return this.expandedSections[key] !== false
+      return this.expandedSections[key] === true
     },
     toggleSection(key) {
       this.$set(this.expandedSections, key, !this.isExpanded(key))
@@ -776,7 +776,9 @@ export default {
       const touched = new Set()
       for (const c of submitted) {
         const codingIds = (c.round1Data.selectionIds && c.round1Data.selectionIds.coding) || []
+        const forcedZero = new Set(c.round1Data.codingForcedZero || [])
         for (const qid of codingIds) {
+          if (forcedZero.has(qid)) continue // "Submit anyway" → 0, never sent to runner
           const existing = (c.round1Data.codingGrades || {})[qid]
           if (pendingOnly && existing && existing.total) continue
           const q = byId[qid]

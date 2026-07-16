@@ -48,41 +48,45 @@
           <p class="empty-sub">Create a drive, then upload its Round 1 questions and share the link.</p>
         </div>
 
-        <!-- Drives grid -->
-        <div v-else class="drives-grid">
-          <div v-for="d in drives" :key="d.id" class="drive-card">
-            <div class="drive-card-head">
-              <div>
-                <div class="drive-name">{{ d.name }}</div>
-                <div class="drive-date">
-                  <v-icon x-small color="rgba(17,17,17,0.4)" class="mr-1">mdi-calendar-outline</v-icon>
-                  {{ d.placementDate }}
-                </div>
-              </div>
-              <v-chip x-small :color="d.round1Active ? 'rgba(76,175,80,0.15)' : 'rgba(17,17,17,0.07)'"
-                :text-color="d.round1Active ? '#4caf50' : 'rgba(17,17,17,0.45)'">
-                {{ d.round1Active ? 'R1 Active' : 'R1 Off' }}
-              </v-chip>
+        <!-- Drives table -->
+        <data-table
+          v-else
+          :columns="columns"
+          :data="driveRows"
+          filter-placeholder="Search drives…"
+          :initial-sorting="[{ id: 'placementDate', desc: true }]"
+        >
+          <template #cell-name="{ row }">
+            <div class="cell-drive" @click="$router.push(`/admin/org/${orgId}/drive/${row.id}`)">
+              <span class="cell-drive-name">{{ row.name }}</span>
+              <span class="cell-drive-id">{{ row.id }}</span>
             </div>
-
-            <div class="drive-meta mt-3">
-              <span><v-icon x-small color="rgba(17,17,17,0.4)" class="mr-1">mdi-timer-outline</v-icon>{{ d.round1Timer }} min</span>
-              <span class="ml-4"><v-icon x-small color="rgba(17,17,17,0.4)" class="mr-1">mdi-identifier</v-icon>{{ d.id }}</span>
-            </div>
-
-            <div class="drive-actions mt-4">
-              <v-btn small color="primary" class="ia-btn flex-grow-1" @click="$router.push(`/admin/org/${orgId}/drive/${d.id}`)">
-                <v-icon left small>mdi-cog-outline</v-icon> Manage
+          </template>
+          <template #cell-placementDate="{ row }">
+            <span class="cell-muted">{{ row.placementDate || '—' }}</span>
+          </template>
+          <template #cell-round1Timer="{ row }">
+            <span class="cell-muted">{{ row.round1Timer }} min</span>
+          </template>
+          <template #cell-status="{ row }">
+            <v-chip x-small :color="statusOf(row).color" :text-color="statusOf(row).text">
+              {{ statusOf(row).label }}
+            </v-chip>
+          </template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <v-btn small color="primary" class="ia-btn" @click="$router.push(`/admin/org/${orgId}/drive/${row.id}`)">
+                <v-icon left x-small>mdi-cog-outline</v-icon> Manage
               </v-btn>
-              <v-btn small icon class="ml-1" title="Copy Round 1 link" @click="copyLink(d)">
+              <v-btn icon small title="Copy Round 1 link" @click="copyLink(row)">
                 <v-icon small color="rgba(17,17,17,0.6)">mdi-link-variant</v-icon>
               </v-btn>
-              <v-btn small icon class="ml-1" title="Delete drive" @click="confirmDelete(d)">
+              <v-btn icon small title="Delete drive" @click="confirmDelete(row)">
                 <v-icon small color="#f44336">mdi-delete-outline</v-icon>
               </v-btn>
             </div>
-          </div>
-        </div>
+          </template>
+        </data-table>
       </div>
     </v-main>
 
@@ -137,25 +141,49 @@
 
 <script>
 import { firebaseService } from '@/services/firebaseService'
+import DataTable from '@/components/DataTable.vue'
 
 export default {
   name: 'AdminOrg',
+  components: { DataTable },
   data() {
     return {
       loading: true,
       orgId: this.$route.params.orgId,
       org: null,
       drives: [],
+      columns: [
+        { accessorKey: 'name', header: 'Drive', enableSorting: true },
+        { accessorKey: 'placementDate', header: 'Placement Date', enableSorting: true },
+        { accessorKey: 'round1Timer', header: 'R1 Timer', enableSorting: true, meta: { align: 'center' } },
+        { accessorKey: 'status', header: 'Status', enableSorting: true, meta: { align: 'center' } },
+        { id: 'actions', header: '', enableSorting: false, meta: { align: 'right' } },
+      ],
       creating: false,
       newDrive: { show: false, name: '', placementDate: new Date().toISOString().slice(0, 10), round1Timer: 45 },
       deleteDialog: { show: false, drive: null },
       snackbar: { show: false, text: '', color: 'success' },
     }
   },
+  computed: {
+    // Rows enriched with a date-aware R1 status (used by the Status column so it
+    // sorts/filters on the meaningful label, not the raw round1Active boolean).
+    driveRows() {
+      return this.drives.map(d => ({ ...d, status: this.statusOf(d).label }))
+    },
+  },
   async mounted() {
     await this.loadAll()
   },
   methods: {
+    // R1 status: manually off → "Off"; else by placement date vs today.
+    statusOf(d) {
+      const today = new Date().toISOString().slice(0, 10)
+      if (d.round1Active === false) return { label: 'Off', color: 'rgba(17,17,17,0.07)', text: 'rgba(17,17,17,0.45)' }
+      if (d.placementDate && d.placementDate > today) return { label: 'Scheduled', color: 'rgba(37,99,235,0.12)', text: '#2563EB' }
+      if (d.placementDate === today) return { label: 'Active', color: 'rgba(76,175,80,0.15)', text: '#4caf50' }
+      return { label: 'Closed', color: 'rgba(17,17,17,0.08)', text: 'rgba(17,17,17,0.5)' }
+    },
     async loadAll() {
       this.loading = true
       try {
@@ -255,6 +283,13 @@ export default {
 .drive-meta { color: rgba(17,17,17,0.55); font-size: 0.8rem; display: flex; align-items: center; }
 .drive-actions { display: flex; align-items: center; }
 .ia-btn { text-transform: none !important; font-weight: 600 !important; border-radius: 8px !important; }
+/* Table cells */
+.cell-drive { display: inline-flex; flex-direction: column; cursor: pointer; }
+.cell-drive-name { font-weight: 700; color: #111111; }
+.cell-drive-name:hover { text-decoration: underline; }
+.cell-drive-id { font-size: 0.72rem; color: rgba(17,17,17,0.4); }
+.cell-muted { color: rgba(17,17,17,0.6); }
+.row-actions { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .dialog-card { background: #FFFFFF !important; border: 1px solid rgba(17,17,17,0.2); border-radius: 12px !important; }
 .dialog-title { color: #111111; font-size: 1.1rem; font-weight: 600; }
 </style>

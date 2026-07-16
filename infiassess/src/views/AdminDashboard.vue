@@ -47,68 +47,42 @@
           </v-btn>
         </div>
 
-        <!-- Org Grid -->
-        <v-row v-else>
-          <v-col
-            v-for="org in orgs"
-            :key="org.id"
-            cols="12"
-            md="4"
-            sm="6"
-          >
-            <div class="org-card">
-              <!-- Card Header -->
-              <div class="org-card-header">
-                <div class="org-icon">
-                  <v-icon color="primary" size="22">mdi-office-building</v-icon>
-                </div>
-                <div class="org-info ml-3">
-                  <div class="org-name">{{ org.name }}</div>
-                  <div class="org-slug">{{ org.slug }}</div>
-                </div>
-                <v-chip
-                  small
-                  class="candidate-badge ml-auto"
-                  color="rgba(17,17,17,0.14)"
-                  text-color="#111111"
-                >
-                  <v-icon left x-small>mdi-briefcase-outline</v-icon>
-                  {{ candidateCounts[org.id] || 0 }} drive{{ (candidateCounts[org.id] || 0) !== 1 ? 's' : '' }}
-                </v-chip>
-              </div>
-
-              <!-- Drive hint -->
-              <div class="org-drive-hint mt-4">
-                <v-icon x-small color="rgba(17,17,17,0.4)" class="mr-1">mdi-briefcase-outline</v-icon>
-                <span class="timer-label">Open to manage placement drives, questions &amp; links</span>
-              </div>
-
-              <!-- Card Footer -->
-              <div class="org-card-footer mt-4">
-                <v-btn
-                  text
-                  small
-                  color="error"
-                  class="delete-btn"
-                  @click.stop="confirmDelete(org)"
-                >
-                  <v-icon left x-small>mdi-delete-outline</v-icon>
-                  Delete
-                </v-btn>
-                <v-spacer />
-                <v-btn
-                  color="primary"
-                  small
-                  class="manage-btn"
-                  @click="$router.push(`/admin/org/${org.slug}`)"
-                >
-                  Manage
-                  <v-icon right small>mdi-arrow-right</v-icon>
-                </v-btn>
-              </div>
+        <!-- Colleges table -->
+        <data-table
+          v-else
+          :columns="columns"
+          :data="orgRows"
+          filter-placeholder="Search colleges…"
+          :initial-sorting="[{ id: 'name', desc: false }]"
+        >
+          <template #cell-name="{ row }">
+            <div class="cell-college" @click="$router.push(`/admin/org/${row.slug}`)">
+              <div class="cell-college-icon"><v-icon size="16" color="primary">mdi-office-building</v-icon></div>
+              <span class="cell-college-name">{{ row.name }}</span>
             </div>
-          </v-col>
-        </v-row>
+          </template>
+          <template #cell-slug="{ row }">
+            <span class="cell-muted">{{ row.slug }}</span>
+          </template>
+          <template #cell-driveCount="{ row }">
+            <v-chip x-small color="rgba(17,17,17,0.10)" text-color="#111111">
+              {{ row.driveCount }} drive{{ row.driveCount !== 1 ? 's' : '' }}
+            </v-chip>
+          </template>
+          <template #cell-createdAt="{ row }">
+            <span class="cell-muted">{{ formatDate(row.createdAt) }}</span>
+          </template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <v-btn small color="primary" class="manage-btn" @click="$router.push(`/admin/org/${row.slug}`)">
+                Manage <v-icon right x-small>mdi-arrow-right</v-icon>
+              </v-btn>
+              <v-btn icon small color="error" title="Delete college" @click.stop="confirmDelete(row)">
+                <v-icon small>mdi-delete-outline</v-icon>
+              </v-btn>
+            </div>
+          </template>
+        </data-table>
       </v-container>
     </v-main>
 
@@ -194,14 +168,23 @@
 
 <script>
 import { firebaseService } from '@/services/firebaseService'
+import DataTable from '@/components/DataTable.vue'
 
 export default {
   name: 'AdminDashboard',
+  components: { DataTable },
   data() {
     return {
       loading: true,
       orgs: [],
       candidateCounts: {},
+      columns: [
+        { accessorKey: 'name', header: 'College', enableSorting: true },
+        { accessorKey: 'slug', header: 'Slug', enableSorting: true },
+        { accessorKey: 'driveCount', header: 'Drives', enableSorting: true, meta: { align: 'center' } },
+        { accessorKey: 'createdAt', header: 'Created', enableSorting: true },
+        { id: 'actions', header: '', enableSorting: false, meta: { align: 'right' } },
+      ],
       newOrgDialog: false,
       orgFormValid: false,
       creating: false,
@@ -228,8 +211,16 @@ export default {
     origin() {
       return window.location.origin
     },
+    orgRows() {
+      return this.orgs.map(o => ({ ...o, driveCount: this.candidateCounts[o.id] || 0 }))
+    },
   },
   methods: {
+    formatDate(ts) {
+      if (!ts) return '—'
+      const d = new Date(ts)
+      return isNaN(d) ? '—' : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    },
     async loadOrgs() {
       this.loading = true
       try {
@@ -524,6 +515,17 @@ export default {
   color: var(--ia-primary-2) !important;
   border: 1px solid rgba(17, 17, 17, 0.3);
 }
+/* Table cells */
+.cell-college { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.cell-college-icon {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  background: var(--ia-primary-soft); border: 1px solid rgba(17,17,17,0.2);
+  display: flex; align-items: center; justify-content: center;
+}
+.cell-college-name { font-weight: 700; color: #111111; }
+.cell-college:hover .cell-college-name { text-decoration: underline; }
+.cell-muted { color: rgba(17,17,17,0.5); }
+.row-actions { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
 .delete-btn {
   text-transform: none !important;
   font-weight: 500;

@@ -70,7 +70,12 @@
                 prepend-inner-icon="mdi-identifier"
                 class="mb-6 ia-field"
                 hide-details="auto"
-                :rules="[v => !!v || 'Roll number is required']"
+                @input="sanitizeRoll"
+                @keypress="blockRollSpecials"
+                :rules="[
+                  v => !!v || 'Roll number is required',
+                  v => /^[A-Za-z0-9]+$/.test(v || '') || 'Only letters and numbers — no spaces or special characters',
+                ]"
               />
               <v-alert v-if="regError" type="error" dense text class="mb-4 text-left" style="font-size:0.85rem">
                 {{ regError }}
@@ -299,6 +304,16 @@
                   </div>
                 </div>
 
+                <!-- Disclaimer: solve with core logic, not shortcut built-ins -->
+                <div class="code-disclaimer mb-3">
+                  <v-icon small color="#B45309" class="mr-2">mdi-alert-outline</v-icon>
+                  <span>
+                    Solve the problem using your own logic. Avoid built-in / library methods that trivially
+                    solve the task (e.g. <code>sort()</code>, <code>reverse()</code>, <code>Collections</code>,
+                    <code>&lt;algorithm&gt;</code> helpers) — implement the approach yourself unless the question says otherwise.
+                  </span>
+                </div>
+
                 <div class="code-label mb-2 d-flex align-center">
                   <v-icon small color="secondary" class="mr-1">mdi-code-braces</v-icon>
                   <span class="caption" style="color:#111111">Your Solution</span>
@@ -314,6 +329,17 @@
                     style="max-width:170px"
                   />
                 </div>
+
+                <!-- Default / available imports for the selected language -->
+                <div v-if="langInfo" class="code-imports mb-2">
+                  <div class="code-imports-head">
+                    <v-icon x-small color="rgba(17,17,17,0.5)" class="mr-1">mdi-package-variant-closed</v-icon>
+                    Available in {{ langInfo.label }} — add the imports you need at the top of your code:
+                  </div>
+                  <pre class="code-imports-pre">{{ langInfo.imports }}</pre>
+                  <div class="code-imports-note">{{ langInfo.note }}</div>
+                </div>
+
                 <div class="ia-editor-area">
                   <code-editor
                     :value="answers[currentQuestion.id] || ''"
@@ -324,10 +350,14 @@
                 </div>
 
                 <!-- Run against sample I/O -->
-                <div class="d-flex align-center mt-3" style="gap:12px">
+                <div class="d-flex align-center flex-wrap mt-3" style="gap:12px">
                   <v-btn small outlined color="secondary" class="ia-btn-outline" :loading="running" @click="runCode">
                     <v-icon left small>mdi-play</v-icon>
                     Run against sample
+                  </v-btn>
+                  <v-btn small text class="submit-anyway-btn" @click="submitAnyway">
+                    <v-icon left small>mdi-debug-step-over</v-icon>
+                    Submit anyway (score 0)
                   </v-btn>
                   <span v-if="runResult && runResult.matches === true" class="run-badge run-pass">
                     <v-icon x-small color="#4caf50">mdi-check-circle</v-icon> Output matches sample
@@ -337,22 +367,32 @@
                   </span>
                 </div>
 
+                <!-- "Submit anyway" acknowledgement -->
+                <div v-if="forcedZero[currentQuestion.id]" class="forced-zero-note mt-3">
+                  <v-icon small color="#B45309" class="mr-2">mdi-information-outline</v-icon>
+                  This question is marked to be submitted <strong>as-is for 0 marks</strong>. Edit the code to undo this.
+                </div>
+
+                <!-- Run result -->
                 <div v-if="runResult" class="run-output mt-3">
-                  <div v-if="runResult.error" class="run-line run-err">{{ runResult.error }}</div>
-                  <template v-else>
-                    <div v-if="runResult.stage === 'compile'">
-                      <div class="run-label run-err-label">Compile error</div>
-                      <pre class="run-pre run-err">{{ runResult.stderr || 'Compilation failed' }}</pre>
+                  <!-- Error banner (reachability / compile / runtime / timeout) -->
+                  <div v-if="runResult.error || runResult.stage === 'compile' || runResult.timedOut || runResult.stderr" class="run-error-banner">
+                    <div class="run-error-title">
+                      <v-icon small color="#DC2626" class="mr-1">mdi-alert-circle</v-icon>
+                      <template v-if="runResult.error">Cannot run</template>
+                      <template v-else-if="runResult.stage === 'compile'">Compilation failed</template>
+                      <template v-else-if="runResult.timedOut">Timed out — exceeded the time limit</template>
+                      <template v-else>Runtime error</template>
                     </div>
-                    <template v-else>
-                      <div v-if="runResult.timedOut" class="run-line run-err">Timed out (exceeded time limit)</div>
-                      <div class="run-label">Output</div>
-                      <pre class="run-pre">{{ runResult.stdout !== '' ? runResult.stdout : '(no output)' }}</pre>
-                      <div v-if="runResult.stderr" class="run-label run-err-label mt-2">Errors</div>
-                      <pre v-if="runResult.stderr" class="run-pre run-err">{{ runResult.stderr }}</pre>
-                      <div v-if="currentQuestion.sampleOutput" class="run-label mt-2">Expected (sample)</div>
-                      <pre v-if="currentQuestion.sampleOutput" class="run-pre">{{ currentQuestion.sampleOutput }}</pre>
-                    </template>
+                    <pre class="run-pre run-err">{{ runResult.error || runResult.stderr || 'Compilation failed' }}</pre>
+                    <div class="run-error-hint">Fix the error and run again, or use “Submit anyway” to skip this question (0 marks).</div>
+                  </div>
+                  <!-- Normal output -->
+                  <template v-if="!runResult.error && runResult.stage === 'run' && !runResult.timedOut">
+                    <div class="run-label">Your output</div>
+                    <pre class="run-pre">{{ runResult.stdout !== '' ? runResult.stdout : '(no output)' }}</pre>
+                    <div v-if="currentQuestion.sampleOutput" class="run-label mt-2">Expected (sample)</div>
+                    <pre v-if="currentQuestion.sampleOutput" class="run-pre">{{ currentQuestion.sampleOutput }}</pre>
                   </template>
                 </div>
               </div>
@@ -516,6 +556,7 @@ export default {
       selection: {},          // { sectionKey: [question objects] } — per-candidate random sample
       answers: {},            // { [questionId]: value }
       codeLangs: {},          // { [questionId]: runner language id } for coding questions
+      forcedZero: {},         // { [questionId]: true } — coding question submitted as-is for 0
       langOptions: [
         { text: 'C', value: 'c' },
         { text: 'C++', value: 'cpp' },
@@ -541,6 +582,42 @@ export default {
   },
 
   computed: {
+    // Info panel: standard libraries available in the runner for the selected
+    // language. The runner ships full toolchains but does NOT auto-inject imports
+    // — candidates must include what they use.
+    langInfo() {
+      const q = this.currentQuestion
+      if (!q || q.type !== 'code') return null
+      const lang = this.codeLangs[q.id] || firebaseService.runnerLang(q.language)
+      const map = {
+        c: {
+          label: 'C',
+          imports: '#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n#include <math.h>   // compiled with -lm',
+          note: 'GCC standard library. Include any C standard headers you need.',
+        },
+        cpp: {
+          label: 'C++',
+          imports: '#include <bits/stdc++.h>\nusing namespace std;   // or include individual headers (<iostream>, <vector>, <algorithm> …)',
+          note: 'g++ with the full C++ standard library.',
+        },
+        python: {
+          label: 'Python',
+          imports: 'import sys, math, re\nimport collections, itertools, functools, heapq, bisect',
+          note: 'Python 3 standard library. Read input with input() / sys.stdin.',
+        },
+        javascript: {
+          label: 'JavaScript',
+          imports: '// Node.js — no import needed for console.\n// Read stdin, e.g.: const data = require("fs").readFileSync(0, "utf8")',
+          note: 'Node.js runtime with built-in modules (fs, readline, …). No npm packages.',
+        },
+        java: {
+          label: 'Java',
+          imports: 'import java.util.*;\nimport java.io.*;\n\npublic class Main { public static void main(String[] args) { /* ... */ } }',
+          note: 'JDK standard library. Your public class MUST be named Main.',
+        },
+      }
+      return map[lang] || null
+    },
     // Departments configured for this drive (admin-managed) → registration dropdown.
     departmentOptions() {
       return (this.drive && Array.isArray(this.drive.departments)) ? this.drive.departments.filter(Boolean) : []
@@ -657,6 +734,7 @@ export default {
           this.restoreSelection(session.selectionIds || {})
           if (session.answers) this.answers = { ...this.answers, ...session.answers }
           if (session.codeLangs) this.codeLangs = { ...this.codeLangs, ...session.codeLangs }
+          if (session.forcedZero) this.forcedZero = { ...session.forcedZero }
           this.submittedSections = session.submittedSections || []
           this.sectionIndex = session.sectionIndex || 0
           this.currentIndex = session.currentIndex || 0
@@ -731,6 +809,7 @@ export default {
         deadline: this.deadline,
         answers: this.answers,
         codeLangs: this.codeLangs,
+        forcedZero: this.forcedZero,
         currentIndex: this.currentIndex,
         sectionIndex: this.sectionIndex,
         submittedSections: this.submittedSections,
@@ -921,6 +1000,7 @@ export default {
         await firebaseService.submitRound1(this.orgSlug, this.driveId, this.candidate.email, {
           answers: { ...this.answers },
           codeLanguages: { ...this.codeLangs },
+          codingForcedZero: Object.keys(this.forcedZero).filter(k => this.forcedZero[k]),
           selectionIds,
           submittedSections: [...this.submittedSections],
           startTime: this.startTime,
@@ -959,6 +1039,26 @@ export default {
     },
     onCodeInput(id, value) {
       this.$set(this.answers, id, value)
+      // Editing the code undoes a prior "Submit anyway" for this question.
+      if (this.forcedZero[id]) this.$set(this.forcedZero, id, false)
+    },
+    // Candidate chooses to move on with broken/incomplete code: keep whatever they
+    // wrote, mark the question for 0, and advance. (Scoring is still admin-side.)
+    submitAnyway() {
+      const q = this.currentQuestion
+      if (!q) return
+      this.$set(this.forcedZero, q.id, true)
+      this.runResult = null
+      if (this.phase === 'assessment') this.saveSession()
+      if (this.currentIndex < this.currentSectionQuestions.length - 1) this.next()
+    },
+    // Roll numbers are alphanumeric only — strip anything else as it's typed/pasted.
+    sanitizeRoll(v) {
+      const clean = (v || '').replace(/[^A-Za-z0-9]/g, '')
+      if (clean !== v) this.form.rollNumber = clean
+    },
+    blockRollSpecials(e) {
+      if (!/[A-Za-z0-9]/.test(e.key)) e.preventDefault()
     },
     onLangChange(id, lang) {
       this.$set(this.codeLangs, id, lang)
@@ -1278,6 +1378,49 @@ export default {
   display: flex;
   align-items: center;
 }
+.code-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  color: #7c4a03;
+  line-height: 1.45;
+}
+.code-disclaimer code {
+  background: rgba(217, 119, 6, 0.14);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 0.78rem;
+}
+.code-imports {
+  background: rgba(17, 17, 17, 0.03);
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.code-imports-head {
+  font-size: 0.76rem;
+  color: rgba(17, 17, 17, 0.6);
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.code-imports-pre {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.76rem;
+  color: #111111;
+  white-space: pre-wrap;
+  margin: 0;
+}
+.code-imports-note {
+  font-size: 0.72rem;
+  color: rgba(17, 17, 17, 0.4);
+  margin-top: 6px;
+}
 /* Language selector — match the rest of the UI's type scale */
 .lang-select { font-family: 'Inter', sans-serif; }
 .lang-select >>> .v-select__selection,
@@ -1316,9 +1459,34 @@ export default {
   max-height: 180px;
   overflow: auto;
 }
-.run-pre.run-err { color: #ff8a80; }
+.run-pre.run-err { color: #B91C1C; }
 .run-line { font-size: 0.85rem; }
-.run-line.run-err { color: #ff8a80; }
+.run-line.run-err { color: #B91C1C; }
+/* Clear error banner for compile/runtime/timeout */
+.run-error-banner {
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+}
+.run-error-title { display: flex; align-items: center; font-weight: 700; font-size: 0.86rem; color: #DC2626; }
+.run-error-hint { font-size: 0.76rem; color: rgba(17, 17, 17, 0.55); margin-top: 6px; }
+.submit-anyway-btn {
+  text-transform: none !important;
+  font-weight: 600;
+  color: rgba(17, 17, 17, 0.55) !important;
+}
+.forced-zero-note {
+  display: flex;
+  align-items: center;
+  background: rgba(217, 119, 6, 0.08);
+  border: 1px solid rgba(217, 119, 6, 0.25);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  color: #7c4a03;
+}
 .ia-editor-area >>> .code-editor-container {
   min-height: 380px;
   height: 380px;

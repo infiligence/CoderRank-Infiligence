@@ -1566,6 +1566,11 @@
   "resolved" "https://registry.npmjs.org/@soda/get-current-script/-/get-current-script-1.0.2.tgz"
   "version" "1.0.2"
 
+"@tanstack/table-core@^8.21.3":
+  "integrity" "sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg=="
+  "resolved" "https://registry.npmjs.org/@tanstack/table-core/-/table-core-8.21.3.tgz"
+  "version" "8.21.3"
+
 "@types/body-parser@*":
   "integrity" "sha512-fB3Zu92ucau0iQ0JMCFQE7b/dv8Ot07NI3KaZIkIUNXq82k4eBAqUaneXfleGY9JWskeS9y+u0nXMyspcuQrCg=="
   "resolved" "https://registry.npmjs.org/@types/body-parser/-/body-parser-1.19.5.tgz"

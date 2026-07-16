@@ -239,7 +239,7 @@ const Round1AnswersPanel = {
     gradingId: { type: String, default: null },
   },
   data() {
-    return { collapsed: {} } // { [sectionKey]: true } when collapsed
+    return { opened: {} } // { [sectionKey]: true } when expanded; collapsed by default
   },
   computed: {
     pct() {
@@ -257,8 +257,8 @@ const Round1AnswersPanel = {
     },
   },
   methods: {
-    isOpen(key) { return !this.collapsed[key] },
-    toggleSection(key) { this.$set(this.collapsed, key, !this.collapsed[key]) },
+    isOpen(key) { return this.opened[key] === true },
+    toggleSection(key) { this.$set(this.opened, key, !this.opened[key]) },
     typeColor(type) {
       const m = { single: { bg: 'rgba(17,17,17,0.15)', text: '#111111' }, mcq: { bg: 'rgba(17,17,17,0.15)', text: '#111111' }, text: { bg: 'rgba(255,183,77,0.15)', text: '#ffb74d' }, code: { bg: 'rgba(76,175,80,0.15)', text: '#4caf50' } }
       return m[type] || m.text
@@ -320,6 +320,9 @@ const Round1AnswersPanel = {
                 <v-chip x-small :color="typeColor(d.type).bg" :text-color="typeColor(d.type).text" class="ml-2">{{ d.type.toUpperCase() }}</v-chip>
                 <v-spacer />
                 <template v-if="d.type === 'code'">
+                  <v-chip v-if="d.forcedZero" x-small color="rgba(217,119,6,0.14)" text-color="#B45309" class="mr-2">
+                    <v-icon x-small left>mdi-debug-step-over</v-icon>Submitted anyway
+                  </v-chip>
                   <span v-if="d.marks != null" class="tc-summary" :class="d.codingGrade && d.codingGrade.passed === d.codingGrade.total ? 'tc-all' : 'tc-some'">{{ d.marks }} / 5 marks</span>
                   <v-chip v-else-if="!(d.question.testCases && d.question.testCases.length)" x-small color="rgba(220,38,38,0.12)" text-color="#DC2626">
                     <v-icon x-small left>mdi-alert-circle-outline</v-icon>No test cases

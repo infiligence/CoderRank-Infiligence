@@ -448,6 +448,7 @@ export const firebaseService = {
     const answers = round1Data.answers
     const codingGrades = round1Data.codingGrades || {}
     const codeLanguages = round1Data.codeLanguages || {}
+    const forcedZero = new Set(round1Data.codingForcedZero || [])
     const byId = {}
     questions.forEach(q => { byId[q.id] = q })
 
@@ -506,19 +507,25 @@ export const firebaseService = {
       } else if (q.type === 'code') {
         result.maxMarks += this.MARKS.code
         sec.maxMarks += this.MARKS.code
-        codingGrade = codingGrades[q.id] || null
-        if (codingGrade && codingGrade.total) {
-          marks = Math.round((codingGrade.passed / codingGrade.total) * this.MARKS.code * 10) / 10
-          result.marks += marks
-          sec.marks += marks
+        if (forcedZero.has(q.id)) {
+          // Candidate chose "Submit anyway" → definitive 0, not sent to the runner.
+          marks = 0
           sec.graded++
         } else {
-          sec.pending++ // not graded yet
+          codingGrade = codingGrades[q.id] || null
+          if (codingGrade && codingGrade.total) {
+            marks = Math.round((codingGrade.passed / codingGrade.total) * this.MARKS.code * 10) / 10
+            result.marks += marks
+            sec.marks += marks
+            sec.graded++
+          } else {
+            sec.pending++ // not graded yet
+          }
         }
       }
 
       const language = q.type === 'code' ? (codeLanguages[q.id] || q.language || '') : (q.language || '')
-      result.details.push({ question: q, section: sk, type: q.type, given, expected, correct, marks, codingGrade, rawAnswer: ans, language })
+      result.details.push({ question: q, section: sk, type: q.type, given, expected, correct, marks, codingGrade, rawAnswer: ans, language, forcedZero: q.type === 'code' && forcedZero.has(q.id) })
     })
     result.marks = Math.round(result.marks * 10) / 10
     Object.values(result.sections).forEach(s => { s.marks = Math.round(s.marks * 10) / 10 })

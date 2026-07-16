@@ -9,11 +9,12 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.14.6",
-    "firebase": "^10.0.0",
+    "@tanstack/table-core": "^8.21.3",
     "ansi-regex": "^6.0.1",
     "axios": "^0.21.1",
     "babel-polyfill": "^6.26.0",
     "core-js": "^3.11.2",
+    "firebase": "^10.0.0",
     "highlight.js": "^10.7.2",
     "markdown-it": "^12.0.6",
     "monaco-editor": "^0.25.2",
